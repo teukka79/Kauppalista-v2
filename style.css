@@ -273,18 +273,16 @@ select:disabled { opacity: 0.45; cursor: not-allowed; }
 .cat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .cat-subtotal { font-size: 13px; color: var(--ink-muted); font-weight: 500; }
 
-/* Item row — 7 columns: check | name | qty stepper | price | total | del */
+/* Item card — two rows */
 .item {
-  display: grid;
-  grid-template-columns: 22px 1fr auto auto auto auto;
-  align-items: center;
-  gap: 8px; padding: 8px 12px;
+  display: flex; flex-direction: column;
   background: var(--white);
   border: 1px solid var(--parchment);
   border-radius: var(--radius-md);
   margin-bottom: 5px;
   transition: var(--transition); box-shadow: var(--shadow-sm);
   animation: fadeUp 0.2s ease both;
+  overflow: hidden;
 }
 .item:hover { border-color: var(--parchment-deep); box-shadow: var(--shadow-md); transform: translateY(-1px); }
 .item.checked { background: var(--cream); box-shadow: none; transform: none; border-color: var(--parchment); }
@@ -292,6 +290,21 @@ select:disabled { opacity: 0.45; cursor: not-allowed; }
 .item.checked .item-price,
 .item.checked .item-total { color: var(--ink-faint); opacity: 0.55; }
 .item.checked .qty-stepper { opacity: 0.4; pointer-events: none; }
+
+/* Row 1: checkbox + name + delete button */
+.item-row1 {
+  display: flex; align-items: center; gap: 9px;
+  padding: 10px 12px 7px;
+}
+
+/* Row 2: qty stepper + unit price + total — indented to align with name */
+.item-row2 {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 12px 10px 43px;
+  border-top: 1px dashed var(--parchment);
+  margin-top: 0;
+  padding-top: 7px;
+}
 
 /* Checkbox */
 .item-check {
@@ -311,9 +324,9 @@ select:disabled { opacity: 0.45; cursor: not-allowed; }
 }
 .item-check:hover { border-color: var(--accent); }
 
-.item-info { min-width: 0; }
 .item-name {
-  font-size: 14px; color: var(--ink); transition: var(--transition);
+  flex: 1; min-width: 0;
+  font-size: 14px; font-weight: 500; color: var(--ink); transition: var(--transition);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
@@ -340,8 +353,9 @@ select:disabled { opacity: 0.45; cursor: not-allowed; }
   font-feature-settings: "tnum";
 }
 
-.item-price { font-size: 12px; color: var(--ink-muted); min-width: 56px; text-align: right; font-feature-settings: "tnum"; }
-.item-total { font-size: 13px; font-weight: 500; color: var(--ink); min-width: 62px; text-align: right; font-feature-settings: "tnum"; }
+.item-price { font-size: 12px; color: var(--ink-muted); font-feature-settings: "tnum"; white-space: nowrap; }
+.per-unit { font-size: 10px; color: var(--ink-faint); }
+.item-total { font-size: 14px; font-weight: 500; color: var(--ink); font-feature-settings: "tnum"; margin-left: auto; white-space: nowrap; }
 
 .btn-del {
   width: 28px; height: 28px; border: 1px solid transparent; background: transparent;
@@ -579,9 +593,6 @@ select:disabled { opacity: 0.45; cursor: not-allowed; }
   .field-qty     { grid-column: 2;     grid-row: 3; }
   .field-price   { grid-column: 1 / 3; grid-row: 4; }
   .field-btn     { grid-column: 1 / 3; grid-row: 5; }
-
-  .item { grid-template-columns: 22px 1fr auto auto auto; gap: 6px; }
-  .item-price { display: none; }
 
   .summary-pill.muted { display: none; }
   .btn-danger { margin-left: 0; }
