@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kauppalista</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div class="bg-texture"></div>
+
+  <header>
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <path d="M16 10a4 4 0 0 1-8 0"/>
+          </svg>
+        </span>
+        <h1>Kauppalista</h1>
+      </div>
+      <div class="header-summary">
+        <div class="summary-pill" id="pill-count">0 tuotetta</div>
+        <div class="summary-pill muted" id="pill-done">0 / 0 ostettu</div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ADD SECTION -->
+    <section class="add-section">
+      <div class="add-section-title">
+        <h2>Lisää ostoslistalle</h2>
+        <button class="btn-new-product" id="btn-open-lib">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Uusi tuote kirjastoon
+        </button>
+      </div>
+
+      <div class="form-grid">
+        <!-- Row 1: category full width -->
+        <div class="field field-cat">
+          <label for="inp-cat">Kategoria</label>
+          <select id="inp-cat" onchange="onCatChange()"></select>
+        </div>
+
+        <!-- Row 2: product | unit | qty | price -->
+        <div class="field field-product">
+          <label for="inp-product">Tuote</label>
+          <select id="inp-product" onchange="onProductChange()" disabled>
+            <option value="">— valitse ensin kategoria —</option>
+          </select>
+        </div>
+
+        <div class="field field-unit">
+          <label>Yksikkö</label>
+          <div class="toggle-switch" id="unit-toggle">
+            <button class="toggle-opt active" data-val="kpl" onclick="setUnit('kpl')">kpl</button>
+            <button class="toggle-opt" data-val="kg" onclick="setUnit('kg')">kg</button>
+          </div>
+        </div>
+
+        <div class="field field-qty">
+          <label for="inp-qty" id="qty-label">Määrä (kpl)</label>
+          <input id="inp-qty" type="number" min="0.1" step="1" value="1" />
+        </div>
+
+        <div class="field field-price">
+          <label for="inp-price" id="price-label">Hinta / kpl (€)</label>
+          <input id="inp-price" type="number" min="0" step="0.01" placeholder="0.00" />
+        </div>
+
+        <!-- Row 3: button -->
+        <div class="field field-btn">
+          <button id="btn-add" onclick="addItem()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Lisää listalle
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- FILTER BAR -->
+    <section class="filter-section">
+      <div class="filter-bar" id="filter-bar"></div>
+    </section>
+
+    <!-- LIST -->
+    <section class="list-section" id="list-container"></section>
+
+    <!-- FOOTER -->
+    <footer class="app-footer">
+      <div class="footer-actions">
+        <button class="btn-secondary" onclick="exportJSON()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Vie JSON
+        </button>
+        <button class="btn-secondary" onclick="exportCSV()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Vie CSV
+        </button>
+        <label class="btn-secondary" style="cursor:pointer">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Tuo lista
+          <input type="file" accept=".json,.csv" style="display:none" onchange="importList(event)" />
+        </label>
+        <button class="btn-secondary" onclick="openLibraryManager()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          Kirjasto
+        </button>
+        <button class="btn-danger" onclick="clearAll()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          Tyhjennä lista
+        </button>
+      </div>
+    </footer>
+
+  </main>
+
+  <!-- STICKY TOTAL BAR -->
+  <div class="total-bar" id="total-bar" style="display:none">
+    <div class="total-bar-inner">
+      <div class="total-bar-left">
+        <span class="total-bar-label">Kokonaishinta</span>
+        <span class="total-bar-sub" id="total-bar-sub"></span>
+      </div>
+      <span class="total-bar-amount" id="total-bar-amount">0,00 €</span>
+    </div>
+  </div>
+
+  <!-- POPUP: ADD TO LIBRARY -->
+  <div class="popup-overlay" id="popup-overlay" onclick="closeLibPopup(event)">
+    <div class="popup-card" id="popup-card">
+      <div class="popup-header">
+        <div class="popup-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          Lisää tuote kirjastoon
+        </div>
+        <button class="popup-close" onclick="document.getElementById('popup-overlay').classList.remove('open')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="popup-body">
+        <!-- Category row with edit button -->
+        <div class="field" style="margin-bottom:10px">
+          <label for="lib-cat">Kategoria</label>
+          <div class="cat-row">
+            <select id="lib-cat" style="flex:1"></select>
+            <button class="btn-edit-cat" id="btn-edit-cat" title="Hallitse kategorioita" onclick="toggleCatEditor()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Category editor (hidden by default) -->
+        <div class="cat-editor" id="cat-editor" style="display:none">
+          <div class="cat-editor-title">Hallitse kategorioita</div>
+          <div class="cat-editor-list" id="cat-editor-list"></div>
+          <div class="cat-add-row">
+            <input id="new-cat-input" type="text" placeholder="Uuden kategorian nimi" />
+            <button class="btn-cat-add-confirm" onclick="addCustomCategory()">Lisää</button>
+          </div>
+        </div>
+
+        <div class="field" style="margin-bottom:10px">
+          <label for="lib-name">Tuotteen nimi</label>
+          <input id="lib-name" type="text" placeholder="esim. Banaanit" autocomplete="off" />
+        </div>
+        <div class="field" style="margin-bottom:10px">
+          <label>Yksikkö</label>
+          <div class="toggle-switch" id="lib-unit-toggle">
+            <button class="toggle-opt active" data-val="kpl" onclick="setLibUnit('kpl')">kpl</button>
+            <button class="toggle-opt" data-val="kg" onclick="setLibUnit('kg')">kg</button>
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:20px">
+          <label for="lib-price" id="lib-price-label">Hinta / kpl (€) — valinnainen</label>
+          <input id="lib-price" type="number" min="0" step="0.01" placeholder="0.00" />
+        </div>
+        <button class="btn-popup-save" onclick="saveToLibrary()">
+          Tallenna kirjastoon
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- POPUP: LIBRARY MANAGER -->
+  <div class="popup-overlay" id="lib-manager-overlay" onclick="closeLibManager(event)">
+    <div class="popup-card popup-card-wide" id="lib-manager-card">
+      <div class="popup-header">
+        <div class="popup-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          Tuotekirjasto
+        </div>
+        <button class="popup-close" onclick="document.getElementById('lib-manager-overlay').classList.remove('open')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="popup-body" id="lib-manager-body"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>
