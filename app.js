@@ -82,7 +82,7 @@ function populateCatSelect(id, includeAll) {
     sel.appendChild(ph);
   }
 
-  cats.forEach(c => {
+  cats.slice().sort((a, b) => a.localeCompare(b, 'fi')).forEach(c => {
     const o = document.createElement('option');
     o.value = o.textContent = c;
     sel.appendChild(o);
@@ -562,23 +562,28 @@ function buildItemRow(it) {
     ? it.qty.toFixed(it.qty % 1 === 0 ? 0 : 1) + ' kg'
     : (it.qty % 1 === 0 ? it.qty : it.qty.toFixed(1)) + ' kpl';
 
+  const priceStr = fmtPrice(it.price);
+  const unitSuffix = u === 'kg' ? '<span class="per-unit">/kg</span>' : '';
+
   row.innerHTML = `
-    <input type="checkbox" class="item-check" ${it.done ? 'checked' : ''} />
-    <div class="item-info">
+    <div class="item-row1">
+      <input type="checkbox" class="item-check" ${it.done ? 'checked' : ''} />
       <div class="item-name">${escHtml(it.name)}</div>
+      <button class="btn-del" title="Poista listalta">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
     </div>
-    <div class="qty-stepper">
-      <button class="qty-btn btn-minus" title="Vähennä">−</button>
-      <span class="qty-value">${qtyStr}</span>
-      <button class="qty-btn btn-plus" title="Lisää">+</button>
-    </div>
-    <div class="item-price">${fmtPrice(it.price)}${u === 'kg' ? '<span style="font-size:10px;color:var(--ink-faint)">/kg</span>' : ''}</div>
-    <div class="item-total">${fmt(it.qty * it.price)}</div>
-    <button class="btn-del" title="Poista listalta">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-      </svg>
-    </button>`;
+    <div class="item-row2">
+      <div class="qty-stepper">
+        <button class="qty-btn btn-minus" title="Vähennä">−</button>
+        <span class="qty-value">${qtyStr}</span>
+        <button class="qty-btn btn-plus" title="Lisää">+</button>
+      </div>
+      <div class="item-price">${priceStr}${unitSuffix}</div>
+      <div class="item-total">${fmt(it.qty * it.price)}</div>
+    </div>`;
 
   row.querySelector('.item-check').addEventListener('change', () => toggleItem(it.id));
   row.querySelector('.btn-minus').addEventListener('click',   () => changeQty(it.id, -1));
