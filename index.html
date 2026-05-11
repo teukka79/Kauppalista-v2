@@ -13,6 +13,7 @@
 
   <div class="bg-texture"></div>
 
+  <!-- HEADER -->
   <header>
     <div class="header-inner">
       <div class="logo">
@@ -30,6 +31,22 @@
         <div class="summary-pill muted" id="pill-done">0 / 0 ostettu</div>
       </div>
     </div>
+
+    <!-- TABS -->
+    <div class="tab-bar">
+      <div class="tab-bar-inner">
+        <button class="tab active" id="tab-ruoka" onclick="switchTab('ruoka')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>
+          Ruoka
+          <span class="tab-badge" id="badge-ruoka"></span>
+        </button>
+        <button class="tab" id="tab-tavarat" onclick="switchTab('tavarat')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2"/><path d="M8 7V5a2 2 0 0 0-4 0v2"/></svg>
+          Tavarat
+          <span class="tab-badge" id="badge-tavarat"></span>
+        </button>
+      </div>
+    </div>
   </header>
 
   <main>
@@ -37,7 +54,7 @@
     <!-- ADD SECTION -->
     <section class="add-section">
       <div class="add-section-title">
-        <h2>Lisää ostoslistalle</h2>
+        <h2 id="add-section-label">Lisää ruokalistalle</h2>
         <button class="btn-new-product" id="btn-open-lib">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -47,21 +64,21 @@
       </div>
 
       <div class="form-grid">
-        <!-- Row 1: category full width -->
         <div class="field field-cat">
           <label for="inp-cat">Kategoria</label>
           <select id="inp-cat" onchange="onCatChange()"></select>
         </div>
 
-        <!-- Row 2: product | unit | qty | price -->
-        <div class="field field-product">
+        <!-- RUOKA: product select (shown only on ruoka tab) -->
+        <div class="field field-product" id="row-ruoka-product">
           <label for="inp-product">Tuote</label>
           <select id="inp-product" onchange="onProductChange()" disabled>
             <option value="">— valitse ensin kategoria —</option>
           </select>
         </div>
 
-        <div class="field field-unit">
+        <!-- RUOKA: unit toggle (shown only on ruoka tab) -->
+        <div class="field field-unit" id="row-ruoka-unit">
           <label>Yksikkö</label>
           <div class="toggle-switch" id="unit-toggle">
             <button class="toggle-opt active" data-val="kpl" onclick="setUnit('kpl')">kpl</button>
@@ -69,6 +86,19 @@
           </div>
         </div>
 
+        <!-- TAVARAT: text input + library button (shown only on tavarat tab) -->
+        <div class="field field-tavarat-product" id="row-tavarat-product" style="display:none">
+          <label for="inp-tavarat-name">Tuote</label>
+          <div class="tavarat-product-row">
+            <input id="inp-tavarat-name" type="text" placeholder="Kirjoita tuotteen nimi..." autocomplete="off" />
+            <button class="btn-tavarat-lib" id="btn-tavarat-lib" title="Valitse kirjastosta">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+              Kirjasto
+            </button>
+          </div>
+        </div>
+
+        <!-- Shared: qty -->
         <div class="field field-qty">
           <label for="inp-qty" id="qty-label">Määrä (kpl)</label>
           <input id="inp-qty" type="number" min="0.1" step="1" value="1" />
@@ -79,7 +109,17 @@
           <input id="inp-price" type="number" min="0" step="0.01" placeholder="0.00" />
         </div>
 
-        <!-- Row 3: button -->
+        <!-- TAVARAT library picker dropdown (hidden by default) -->
+        <div class="tavarat-lib-picker" id="tavarat-lib-picker" style="display:none">
+          <div class="tlp-header">
+            <span class="tlp-title">Valitse kirjastosta</span>
+            <button class="tlp-close" onclick="closeTavaratLibPicker()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="tlp-list" id="tlp-list"></div>
+        </div>
+
         <div class="field field-btn">
           <button id="btn-add" onclick="addItem()">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
@@ -121,7 +161,7 @@
         </button>
         <button class="btn-danger" onclick="clearAll()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-          Tyhjennä lista
+          Tyhjennä
         </button>
       </div>
     </footer>
@@ -141,7 +181,7 @@
 
   <!-- POPUP: ADD TO LIBRARY -->
   <div class="popup-overlay" id="popup-overlay" onclick="closeLibPopup(event)">
-    <div class="popup-card" id="popup-card">
+    <div class="popup-card">
       <div class="popup-header">
         <div class="popup-title">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
@@ -151,9 +191,17 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
-
       <div class="popup-body">
-        <!-- Category row with edit button -->
+
+        <!-- Tab selector inside popup -->
+        <div class="field" style="margin-bottom:10px">
+          <label>Välilehti</label>
+          <div class="toggle-switch" id="lib-tab-toggle">
+            <button class="toggle-opt active" data-val="ruoka" onclick="setLibTab('ruoka')">Ruoka</button>
+            <button class="toggle-opt" data-val="tavarat" onclick="setLibTab('tavarat')">Tavarat</button>
+          </div>
+        </div>
+
         <div class="field" style="margin-bottom:10px">
           <label for="lib-cat">Kategoria</label>
           <div class="cat-row">
@@ -164,7 +212,6 @@
           </div>
         </div>
 
-        <!-- Category editor (hidden by default) -->
         <div class="cat-editor" id="cat-editor" style="display:none">
           <div class="cat-editor-title">Hallitse kategorioita</div>
           <div class="cat-editor-list" id="cat-editor-list"></div>
@@ -178,7 +225,7 @@
           <label for="lib-name">Tuotteen nimi</label>
           <input id="lib-name" type="text" placeholder="esim. Banaanit" autocomplete="off" />
         </div>
-        <div class="field" style="margin-bottom:10px">
+        <div class="field" style="margin-bottom:10px" id="lib-unit-row">
           <label>Yksikkö</label>
           <div class="toggle-switch" id="lib-unit-toggle">
             <button class="toggle-opt active" data-val="kpl" onclick="setLibUnit('kpl')">kpl</button>
@@ -189,16 +236,14 @@
           <label for="lib-price" id="lib-price-label">Hinta / kpl (€) — valinnainen</label>
           <input id="lib-price" type="number" min="0" step="0.01" placeholder="0.00" />
         </div>
-        <button class="btn-popup-save" onclick="saveToLibrary()">
-          Tallenna kirjastoon
-        </button>
+        <button class="btn-popup-save" onclick="saveToLibrary()">Tallenna kirjastoon</button>
       </div>
     </div>
   </div>
 
   <!-- POPUP: LIBRARY MANAGER -->
   <div class="popup-overlay" id="lib-manager-overlay" onclick="closeLibManager(event)">
-    <div class="popup-card popup-card-wide" id="lib-manager-card">
+    <div class="popup-card popup-card-wide">
       <div class="popup-header">
         <div class="popup-title">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
@@ -207,6 +252,11 @@
         <button class="popup-close" onclick="document.getElementById('lib-manager-overlay').classList.remove('open')">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
+      </div>
+      <!-- Tab selector inside library manager -->
+      <div style="padding: 0 1.5rem 1rem; display:flex; gap:8px;">
+        <button class="filter-btn active" id="lm-tab-ruoka" onclick="switchLibManagerTab('ruoka')">🥦 Ruoka</button>
+        <button class="filter-btn" id="lm-tab-tavarat" onclick="switchLibManagerTab('tavarat')">🛍 Tavarat</button>
       </div>
       <div class="popup-body" id="lib-manager-body"></div>
     </div>
