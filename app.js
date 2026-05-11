@@ -60,7 +60,7 @@ function LT()      { return TABS[libTab]; }
 
 (function init() {
   loadFromStorage();
-
+  document.body.dataset.tab = activeTab;
   refreshFormSelects();
   render();
 
@@ -108,6 +108,8 @@ function switchTab(tab) {
   document.getElementById('tab-ruoka').classList.toggle('active',   tab === 'ruoka');
   document.getElementById('tab-tavarat').classList.toggle('active', tab === 'tavarat');
   document.getElementById('add-section-label').textContent = T().addLabel;
+  // Mark body so CSS can target tavarat-specific layout
+  document.body.dataset.tab = tab;
 
   // Show/hide tab-specific form elements
   const isRuoka = tab === 'ruoka';
@@ -116,15 +118,20 @@ function switchTab(tab) {
   document.getElementById('row-tavarat-product').style.display = isRuoka ? 'none' : '';
   document.getElementById('tavarat-lib-picker').style.display  = 'none';
 
-  // Adjust grid positions for qty/price when tavarat (no unit col)
+  // For tavarat: no unit column, so qty/price shift left on desktop grid
+  // On mobile everything stacks, so we also reassign rows
   const qtyField   = document.querySelector('.field-qty');
   const priceField = document.querySelector('.field-price');
-  if (isRuoka) {
-    qtyField.style.gridColumn   = '3';
-    priceField.style.gridColumn = '4';
+  if (!isRuoka) {
+    // Tavarat desktop: unit col gone, qty=col3 price=col4 (same, unit col just hidden)
+    // Tavarat mobile: qty col1 row3, price col2 row3, btn row4
+    qtyField.style.gridRow    = '';
+    priceField.style.gridRow  = '';
+    document.querySelector('.field-btn').style.gridRow = '';
   } else {
-    qtyField.style.gridColumn   = '3';
-    priceField.style.gridColumn = '4';
+    qtyField.style.gridRow    = '';
+    priceField.style.gridRow  = '';
+    document.querySelector('.field-btn').style.gridRow = '';
   }
 
   // Update qty label (no kg on tavarat)
