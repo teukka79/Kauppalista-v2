@@ -714,6 +714,30 @@ select:disabled { opacity: 0.45; cursor: not-allowed; }
 }
 
 /* ============================================================
+   TAB-AWARE LAYOUT (desktop + mobile)
+   ============================================================ */
+
+/* Tavarat desktop: product spans cols 1-2 (unit col hidden), qty col3, price col4 */
+body[data-tab="tavarat"] .field-qty   { grid-column: 3; grid-row: 2; }
+body[data-tab="tavarat"] .field-price { grid-column: 4; grid-row: 2; }
+body[data-tab="tavarat"] .field-btn   { grid-column: 1 / 5; grid-row: 3; }
+
+@media (max-width: 620px) {
+  /* Ruoka mobile: unit+qty side by side row3, price full row4, btn row5 */
+  body[data-tab="ruoka"] .field-unit  { grid-column: 1; grid-row: 3; }
+  body[data-tab="ruoka"] .field-qty   { grid-column: 2; grid-row: 3; }
+  body[data-tab="ruoka"] .field-price { grid-column: 1 / 3; grid-row: 4; }
+  body[data-tab="ruoka"] .field-btn   { grid-column: 1 / 3; grid-row: 5; }
+
+  /* Tavarat mobile: product full row2, qty+price side by side row3, btn row4 */
+  body[data-tab="tavarat"] .field-tavarat-product { grid-column: 1 / 3; grid-row: 2; }
+  body[data-tab="tavarat"] .field-qty             { grid-column: 1;     grid-row: 3; }
+  body[data-tab="tavarat"] .field-price           { grid-column: 2;     grid-row: 3; }
+  body[data-tab="tavarat"] .field-btn             { grid-column: 1 / 3; grid-row: 4; }
+  body[data-tab="tavarat"] .tavarat-lib-picker    { grid-column: 1 / 3; grid-row: 5; }
+}
+
+/* ============================================================
    RESPONSIVE
    ============================================================ */
 
@@ -721,23 +745,29 @@ select:disabled { opacity: 0.45; cursor: not-allowed; }
   .header-inner { padding: 0.7rem 1rem; }
   main { padding: 1.25rem 1rem 2rem; }
   .add-section { padding: 1.25rem; border-radius: var(--radius-lg); }
+  .add-section-title { flex-wrap: wrap; }
 
   .form-grid { grid-template-columns: 1fr 1fr; }
+
+  /* Base mobile assignments (overridden by data-tab rules above) */
   .field-cat             { grid-column: 1 / 3; grid-row: 1; }
   .field-product         { grid-column: 1 / 3; grid-row: 2; }
   .field-tavarat-product { grid-column: 1 / 3; grid-row: 2; }
-  .field-unit            { grid-column: 1;     grid-row: 3; }
-  .field-qty             { grid-column: 1;     grid-row: 3; }
-  .field-price           { grid-column: 2;     grid-row: 3; }
-  .field-btn             { grid-column: 1 / 3; grid-row: 5; }
   .tavarat-lib-picker    { grid-column: 1 / 3; }
+
+  .tab-bar-inner { padding: 0 1rem; }
+  .tab { padding: 0 14px; font-size: 13px; }
 
   .summary-pill.muted { display: none; }
   .btn-danger { margin-left: 0; }
   .total-bar-amount { font-size: 22px; }
+
+  .footer-actions { gap: 6px; }
+  .btn-secondary, .btn-danger { font-size: 11px; padding: 0 10px; }
 }
 
 @media (max-width: 400px) {
   .logo h1 { font-size: 18px; }
   .add-section-title { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .tab { padding: 0 10px; font-size: 12px; gap: 4px; }
 }
