@@ -1,19 +1,21 @@
 /* ============================================================
-   KAUPPALISTA — app.js v4
-   + qty stepper on list items
-   + custom / editable categories
-   + "Kaikki kategoriat" shows all products
+   KAUPPALISTA — app.js v5
+   Two tabs: Ruoka & Tavarat — each with own items, library, cats
    ============================================================ */
 
 'use strict';
 
-/* Default categories — user can add/remove custom ones */
-const DEFAULT_CATS = [
+const DEFAULT_CATS_RUOKA = [
   "Hedelmät & vihannekset","Leivät","Liha, Kana, Kala","Maitotuotteet",
   "Juustot","Munat","Rasvat","Pastat, Riisit, Nuudelit","Valmisruoka",
   "Mausteet","Hiutaleet, Murot & Myslit","Pähkinät & Siemenet","Pakasteet",
-  "Kahvi & Tee","Hillot & Säilykkeet","Kodinhoito & Taloustarvikkeet",
-  "Kosmetiikka & Hygienia","Urheiluravinteet & Terveys"
+  "Kahvi & Tee","Hillot & Säilykkeet"
+];
+
+const DEFAULT_CATS_TAVARAT = [
+  "Kodinhoito & Taloustarvikkeet","Kosmetiikka & Hygienia",
+  "Urheiluravinteet & Terveys","Elektroniikka","Vaatteet & Tekstiilit",
+  "Kodin sisustus","Työkalut & Tarvikkeet","Lemmikkitarvikkeet","Muut tavarat"
 ];
 
 const CAT_COLORS = [
@@ -23,22 +25,43 @@ const CAT_COLORS = [
   '#A87A5C','#6B5CA8','#5CA86B','#7A5C8A','#5C8A7A'
 ];
 
-/* ─── State ─────────────────────────────────────────────── */
-let items     = [];
-let library   = {};   // { catName: [{id, name, unit, price}] }
-let cats      = [];   // ordered list of category names (user-editable)
-let filterCat = 'Kaikki';
+/* ─── Tab state ─────────────────────────────────────────── */
+/* Each tab has independent: items, library, cats, filterCat */
+const TABS = {
+  ruoka: {
+    label:     'Ruoka',
+    addLabel:  'Lisää ruokalistalle',
+    items:     [],
+    library:   {},
+    cats:      [],
+    filterCat: 'Kaikki'
+  },
+  tavarat: {
+    label:     'Tavarat',
+    addLabel:  'Lisää tavaroihin',
+    items:     [],
+    library:   {},
+    cats:      [],
+    filterCat: 'Kaikki'
+  }
+};
+
+let activeTab = 'ruoka';   // 'ruoka' | 'tavarat'
 let unit      = 'kpl';
 let libUnit   = 'kpl';
+let libTab    = 'ruoka';   // which tab the library popup targets
+let lmTab     = 'ruoka';   // which tab the library manager shows
+
+/* ─── Convenience getters ───────────────────────────────── */
+function T()       { return TABS[activeTab]; }
+function LT()      { return TABS[libTab]; }
 
 /* ─── Init ──────────────────────────────────────────────── */
 
 (function init() {
   loadFromStorage();
 
-  populateCatSelect('inp-cat', true);   // with "Kaikki kategoriat" option
-  populateCatSelect('lib-cat', false);  // without it
-
+  refreshFormSelects();
   render();
 
   document.addEventListener('keydown', e => {
@@ -55,25 +78,88 @@ let libUnit   = 'kpl';
   document.getElementById('new-cat-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') addCustomCategory();
   });
+  document.getElementById('btn-tavarat-lib').addEventListener('click', () => {
+    const picker = document.getElementById('tavarat-lib-picker');
+    if (picker.style.display === 'none' || picker.style.display === '') {
+      openTavaratLibPicker();
+    } else {
+      closeTavaratLibPicker();
+    }
+  });
+  document.getElementById('inp-tavarat-name').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addItem();
+  });
+  // Hide lib picker when clicking outside
+  document.addEventListener('click', e => {
+    const picker = document.getElementById('tavarat-lib-picker');
+    if (picker.style.display !== 'none') {
+      const btn = document.getElementById('btn-tavarat-lib');
+      if (!picker.contains(e.target) && !btn.contains(e.target)) closeTavaratLibPicker();
+    }
+  });
 })();
+
+/* ─── Tab switching ─────────────────────────────────────── */
+
+function switchTab(tab) {
+  activeTab = tab;
+  unit = 'kpl';
+
+  document.getElementById('tab-ruoka').classList.toggle('active',   tab === 'ruoka');
+  document.getElementById('tab-tavarat').classList.toggle('active', tab === 'tavarat');
+  document.getElementById('add-section-label').textContent = T().addLabel;
+
+  // Show/hide tab-specific form elements
+  const isRuoka = tab === 'ruoka';
+  document.getElementById('row-ruoka-product').style.display  = isRuoka ? '' : 'none';
+  document.getElementById('row-ruoka-unit').style.display     = isRuoka ? '' : 'none';
+  document.getElementById('row-tavarat-product').style.display = isRuoka ? 'none' : '';
+  document.getElementById('tavarat-lib-picker').style.display  = 'none';
+
+  // Adjust grid positions for qty/price when tavarat (no unit col)
+  const qtyField   = document.querySelector('.field-qty');
+  const priceField = document.querySelector('.field-price');
+  if (isRuoka) {
+    qtyField.style.gridColumn   = '3';
+    priceField.style.gridColumn = '4';
+  } else {
+    qtyField.style.gridColumn   = '3';
+    priceField.style.gridColumn = '4';
+  }
+
+  // Update qty label (no kg on tavarat)
+  document.getElementById('qty-label').textContent   = 'Määrä (kpl)';
+  document.getElementById('price-label').textContent = 'Hinta / kpl (€)';
+
+  // Reset form fields
+  setUnit('kpl');
+  document.getElementById('inp-price').value = '';
+  document.getElementById('inp-qty').value   = '1';
+  document.getElementById('inp-tavarat-name').value = '';
+
+  refreshFormSelects();
+  render();
+}
 
 /* ─── Category helpers ──────────────────────────────────── */
 
-function getCatColor(catName) {
-  const idx = cats.indexOf(catName);
-  return CAT_COLORS[(idx >= 0 ? idx : cats.length) % CAT_COLORS.length];
+function getCatColor(catName, tabKey) {
+  const t   = TABS[tabKey || activeTab];
+  const idx = t.cats.indexOf(catName);
+  return CAT_COLORS[(idx >= 0 ? idx : t.cats.length) % CAT_COLORS.length];
 }
 
-function populateCatSelect(id, includeAll) {
-  const sel = document.getElementById(id);
+function populateCatSelect(selId, tabKey, includeAll) {
+  const sel  = document.getElementById(selId);
+  const cats = TABS[tabKey].cats;
   sel.innerHTML = '';
 
   if (includeAll) {
     const all = document.createElement('option');
-    all.value = '__all__';
-    all.textContent = 'Kaikki kategoriat';
+    all.value = '__all__'; all.textContent = 'Kaikki kategoriat';
     sel.appendChild(all);
-    const sep = document.createElement('option'); sep.disabled = true; sep.textContent = '──────────────';
+    const sep = document.createElement('option');
+    sep.disabled = true; sep.textContent = '──────────────';
     sel.appendChild(sep);
   } else {
     const ph = document.createElement('option');
@@ -89,13 +175,20 @@ function populateCatSelect(id, includeAll) {
   });
 }
 
-/* ─── Category editor (in popup) ────────────────────────── */
+function refreshFormSelects() {
+  populateCatSelect('inp-cat', activeTab, true);
+  document.getElementById('inp-product').innerHTML =
+    '<option value="">— valitse ensin kategoria —</option>';
+  document.getElementById('inp-product').disabled = true;
+}
+
+/* ─── Category editor ───────────────────────────────────── */
 
 function toggleCatEditor() {
   const ed  = document.getElementById('cat-editor');
   const btn = document.getElementById('btn-edit-cat');
   const open = ed.style.display === 'none' || ed.style.display === '';
-  ed.style.display  = open ? 'block' : 'none';
+  ed.style.display = open ? 'block' : 'none';
   btn.classList.toggle('active', open);
   if (open) renderCatEditorList();
 }
@@ -103,19 +196,19 @@ function toggleCatEditor() {
 function renderCatEditorList() {
   const list = document.getElementById('cat-editor-list');
   list.innerHTML = '';
-  cats.forEach(c => {
+  LT().cats.forEach(c => {
     const row = document.createElement('div');
     row.className = 'cat-editor-row';
-    const inUse = library[c] && library[c].length > 0;
+    const inUse = LT().library[c] && LT().library[c].length > 0;
     row.innerHTML = `
       <span class="cat-editor-name">${escHtml(c)}</span>
-      <button class="btn-cat-del" ${inUse ? 'disabled title="Kategoriassa on tuotteita"' : `title="Poista kategoria"`}>
+      <button class="btn-cat-del" ${inUse ? 'disabled title="Kategoriassa on tuotteita"' : 'title="Poista"'}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
         </svg>
       </button>`;
     if (!inUse) {
-      row.querySelector('.btn-cat-del').addEventListener('click', () => deleteCategory(c));
+      row.querySelector('.btn-cat-del').addEventListener('click', () => deleteCategoryLib(c));
     }
     list.appendChild(row);
   });
@@ -125,38 +218,34 @@ function addCustomCategory() {
   const inp  = document.getElementById('new-cat-input');
   const name = inp.value.trim();
   if (!name) { toast('Anna kategorian nimi'); return; }
-  if (cats.find(c => c.toLowerCase() === name.toLowerCase())) {
+  if (LT().cats.find(c => c.toLowerCase() === name.toLowerCase())) {
     toast('Kategoria on jo olemassa'); return;
   }
-  cats.push(name);
+  LT().cats.push(name);
   saveToStorage();
-  populateCatSelect('inp-cat', true);
-  populateCatSelect('lib-cat', false);
+  // Refresh lib-cat select (stays in libTab context)
+  populateCatSelect('lib-cat', libTab, false);
+  // If libTab === activeTab, refresh form too
+  if (libTab === activeTab) refreshFormSelects();
   renderCatEditorList();
   inp.value = '';
   toast('✓ Kategoria lisätty: ' + name);
 }
 
-function deleteCategory(name) {
-  if (library[name] && library[name].length > 0) {
+function deleteCategoryLib(name) {
+  if (LT().library[name] && LT().library[name].length > 0) {
     toast('Poista ensin kategorian tuotteet kirjastosta'); return;
   }
-  cats = cats.filter(c => c !== name);
-  delete library[name];
+  LT().cats = LT().cats.filter(c => c !== name);
+  delete LT().library[name];
   saveToStorage();
-  populateCatSelect('inp-cat', true);
-  populateCatSelect('lib-cat', false);
+  populateCatSelect('lib-cat', libTab, false);
+  if (libTab === activeTab) refreshFormSelects();
   renderCatEditorList();
-  // Reset product select if deleted cat was selected
-  const cur = document.getElementById('inp-cat').value;
-  if (cur === name) {
-    document.getElementById('inp-cat').value = '';
-    renderProductSelect('');
-  }
   toast('Kategoria poistettu: ' + name);
 }
 
-/* ─── Category & Product selects (form) ─────────────────── */
+/* ─── Form: Category & Product selects ──────────────────── */
 
 function onCatChange() {
   const cat = document.getElementById('inp-cat').value;
@@ -174,17 +263,16 @@ function renderProductSelect(cat) {
   }
 
   sel.disabled = false;
+  const lib = T().library;
+  const cats = T().cats;
 
   let products;
   if (cat === '__all__') {
-    // All products from all categories, sorted alphabetically
     products = [];
-    cats.forEach(c => {
-      (library[c] || []).forEach(p => products.push({ ...p, _cat: c }));
-    });
+    cats.forEach(c => (lib[c] || []).forEach(p => products.push({ ...p, _cat: c })));
     products.sort((a, b) => a.name.localeCompare(b.name, 'fi'));
   } else {
-    products = (library[cat] || []).slice().sort((a, b) => a.name.localeCompare(b.name, 'fi'));
+    products = (lib[cat] || []).slice().sort((a, b) => a.name.localeCompare(b.name, 'fi'));
   }
 
   if (products.length === 0) {
@@ -199,7 +287,6 @@ function renderProductSelect(cat) {
   products.forEach(p => {
     const o = document.createElement('option');
     o.value = p.id;
-    // Show category name when "all" is selected
     o.textContent = cat === '__all__' ? p.name + '  (' + (p._cat || '') + ')' : p.name;
     sel.appendChild(o);
   });
@@ -210,15 +297,15 @@ function onProductChange() {
   const id  = document.getElementById('inp-product').value;
   if (!id) return;
 
-  // Find product across all cats if "all" selected
   let product = null;
+  const lib = T().library;
   if (cat === '__all__') {
-    for (const c of cats) {
-      product = (library[c] || []).find(p => String(p.id) === String(id));
+    for (const c of T().cats) {
+      product = (lib[c] || []).find(p => String(p.id) === String(id));
       if (product) { product = { ...product, _cat: c }; break; }
     }
   } else {
-    product = (library[cat] || []).find(p => String(p.id) === String(id));
+    product = (lib[cat] || []).find(p => String(p.id) === String(id));
   }
   if (!product) return;
 
@@ -239,7 +326,7 @@ function setUnit(val) {
   document.getElementById('price-label').textContent = val === 'kg' ? 'Hinta / kg (€)' : 'Hinta / kpl (€)';
   const qtyEl = document.getElementById('inp-qty');
   qtyEl.step  = val === 'kg' ? '0.1' : '1';
-  if (parseFloat(qtyEl.value) === 1 && val === 'kg') qtyEl.value = '0.5';
+  if (parseFloat(qtyEl.value) === 1   && val === 'kg')  qtyEl.value = '0.5';
   if (parseFloat(qtyEl.value) === 0.5 && val === 'kpl') qtyEl.value = '1';
 }
 
@@ -252,38 +339,85 @@ function setLibUnit(val) {
     val === 'kg' ? 'Hinta / kg (€) — valinnainen' : 'Hinta / kpl (€) — valinnainen';
 }
 
+/* ─── Library popup tab ─────────────────────────────────── */
+
+function setLibTab(val) {
+  libTab = val;
+  document.querySelectorAll('#lib-tab-toggle .toggle-opt').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.val === val);
+  });
+  populateCatSelect('lib-cat', libTab, false);
+  document.getElementById('cat-editor').style.display = 'none';
+  document.getElementById('btn-edit-cat').classList.remove('active');
+  // Hide kg unit option for tavarat (no weight-based products)
+  document.getElementById('lib-unit-row').style.display = val === 'tavarat' ? 'none' : '';
+  if (val === 'tavarat') { libUnit = 'kpl'; }
+}
+
+/* ─── Library manager tab ───────────────────────────────── */
+
+function switchLibManagerTab(tab) {
+  lmTab = tab;
+  document.getElementById('lm-tab-ruoka').classList.toggle('active',   tab === 'ruoka');
+  document.getElementById('lm-tab-tavarat').classList.toggle('active', tab === 'tavarat');
+  renderLibraryManager();
+}
+
 /* ─── CRUD: shopping list ───────────────────────────────── */
 
 function addItem() {
+  const qty   = parseFloat(document.getElementById('inp-qty').value)   || 1;
+  const price = parseFloat(document.getElementById('inp-price').value) || 0;
+
+  if (activeTab === 'tavarat') {
+    // ── Tavarat: free-text name, optional category, no unit ──
+    const name   = document.getElementById('inp-tavarat-name').value.trim();
+    const selCat = document.getElementById('inp-cat').value;
+    if (!name) { toast('Kirjoita tuotteen nimi'); document.getElementById('inp-tavarat-name').focus(); return; }
+    if (!selCat) { toast('Valitse ensin kategoria'); return; }
+
+    const resolvedCat = selCat === '__all__' ? (T().cats[0] || 'Muut') : selCat;
+
+    T().items.push({
+      id: Date.now(), name, cat: resolvedCat,
+      unit: 'kpl', qty, price, done: false
+    });
+    saveToStorage(); render();
+    document.getElementById('inp-tavarat-name').value = '';
+    document.getElementById('inp-qty').value = '1';
+    closeTavaratLibPicker();
+    toast('✓ Lisätty: ' + name);
+    return;
+  }
+
+  // ── Ruoka: library-based select ──
   const selCat    = document.getElementById('inp-cat').value;
   const productId = document.getElementById('inp-product').value;
-  const qty       = parseFloat(document.getElementById('inp-qty').value)   || 1;
-  const price     = parseFloat(document.getElementById('inp-price').value) || 0;
 
   if (!selCat)    { toast('Valitse ensin kategoria'); return; }
-  if (!productId) { toast('Valitse tuote listasta'); return; }
+  if (!productId) { toast('Valitse tuote listasta');  return; }
 
-  // Resolve actual category when "all" is selected
   let resolvedCat = selCat;
   let product     = null;
+  const lib = T().library;
+
   if (selCat === '__all__') {
-    for (const c of cats) {
-      product = (library[c] || []).find(p => String(p.id) === String(productId));
+    for (const c of T().cats) {
+      product = (lib[c] || []).find(p => String(p.id) === String(productId));
       if (product) { resolvedCat = c; break; }
     }
   } else {
-    product = (library[selCat] || []).find(p => String(p.id) === String(productId));
+    product = (lib[selCat] || []).find(p => String(p.id) === String(productId));
   }
 
   if (!product) { toast('Tuotetta ei löydy'); return; }
 
-  // Update library price if user changed it
   if (price && price !== product.price) {
     product.price = price;
     saveToStorage();
   }
 
-  items.push({
+  T().items.push({
     id: Date.now(), name: product.name,
     cat: resolvedCat, unit: product.unit || unit,
     qty, price, done: false, libId: product.id
@@ -295,36 +429,92 @@ function addItem() {
 }
 
 function changeQty(id, delta) {
-  const it = items.find(x => x.id === id);
+  const it = T().items.find(x => x.id === id);
   if (!it) return;
-  const step = (it.unit === 'kg') ? 0.1 : 1;
+  const step = it.unit === 'kg' ? 0.1 : 1;
   it.qty = Math.max(step, parseFloat((it.qty + delta * step).toFixed(2)));
   saveToStorage(); render();
 }
 
 function toggleItem(id) {
-  const it = items.find(x => x.id === id);
+  const it = T().items.find(x => x.id === id);
   if (it) { it.done = !it.done; saveToStorage(); render(); }
 }
 
 function removeItem(id) {
-  const it = items.find(x => x.id === id);
-  items = items.filter(x => x.id !== id);
+  const it = T().items.find(x => x.id === id);
+  T().items = T().items.filter(x => x.id !== id);
   saveToStorage(); render();
-  if (it) toast('Poistettu listalta: ' + it.name);
+  if (it) toast('Poistettu: ' + it.name);
 }
 
 function clearAll() {
-  if (items.length === 0) { toast('Lista on jo tyhjä'); return; }
-  const n = items.length;
-  items = []; saveToStorage(); render();
-  toast('Poistettu ' + n + ' tuotetta listalta');
+  if (T().items.length === 0) { toast('Lista on jo tyhjä'); return; }
+  const n = T().items.length;
+  T().items = []; saveToStorage(); render();
+  toast('Poistettu ' + n + ' tuotetta');
+}
+
+/* ─── Tavarat: inline library picker ────────────────────── */
+
+function openTavaratLibPicker() {
+  const picker = document.getElementById('tavarat-lib-picker');
+  const btn    = document.getElementById('btn-tavarat-lib');
+  const list   = document.getElementById('tlp-list');
+  const lib    = T().library;
+  const cats   = T().cats;
+
+  // Build list grouped by category, alphabetical
+  list.innerHTML = '';
+
+  const sortedCats = cats.slice().sort((a, b) => a.localeCompare(b, 'fi'))
+    .filter(c => lib[c] && lib[c].length > 0);
+
+  if (sortedCats.length === 0) {
+    list.innerHTML = '<div style="padding:12px;font-size:13px;color:var(--ink-faint);text-align:center">Kirjasto on tyhjä</div>';
+  } else {
+    sortedCats.forEach(cat => {
+      const label = document.createElement('div');
+      label.className = 'tlp-cat-label';
+      label.textContent = cat;
+      list.appendChild(label);
+
+      (lib[cat] || []).slice().sort((a, b) => a.name.localeCompare(b.name, 'fi')).forEach(p => {
+        const item = document.createElement('button');
+        item.className = 'tlp-item';
+        item.innerHTML = `
+          <span>${escHtml(p.name)}</span>
+          ${p.price ? `<span class="tlp-item-price">${fmtPrice(p.price)}</span>` : ''}`;
+        item.addEventListener('click', () => {
+          document.getElementById('inp-tavarat-name').value = p.name;
+          if (p.price) document.getElementById('inp-price').value = p.price.toFixed(2);
+          closeTavaratLibPicker();
+          document.getElementById('inp-qty').focus();
+        });
+        list.appendChild(item);
+      });
+    });
+  }
+
+  picker.style.display = 'flex';
+  btn.classList.add('open');
+}
+
+function closeTavaratLibPicker() {
+  document.getElementById('tavarat-lib-picker').style.display = 'none';
+  document.getElementById('btn-tavarat-lib').classList.remove('open');
 }
 
 /* ─── Library popup ─────────────────────────────────────── */
 
 function openLibPopup() {
-  document.getElementById('popup-overlay').classList.add('open');
+  // Default popup tab to active tab
+  libTab = activeTab;
+  document.querySelectorAll('#lib-tab-toggle .toggle-opt').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.val === libTab);
+  });
+  populateCatSelect('lib-cat', libTab, false);
+
   document.getElementById('lib-name').value  = '';
   document.getElementById('lib-price').value = '';
   document.getElementById('cat-editor').style.display = 'none';
@@ -334,8 +524,9 @@ function openLibPopup() {
     btn.classList.toggle('active', btn.dataset.val === 'kpl');
   });
   document.getElementById('lib-price-label').textContent = 'Hinta / kpl (€) — valinnainen';
-  // reset lib-cat select
-  populateCatSelect('lib-cat', false);
+  document.getElementById('lib-unit-row').style.display = libTab === 'tavarat' ? 'none' : '';
+  if (libTab === 'tavarat') libUnit = 'kpl';
+  document.getElementById('popup-overlay').classList.add('open');
   setTimeout(() => document.getElementById('lib-cat').focus(), 150);
 }
 
@@ -352,26 +543,32 @@ function saveToLibrary() {
   if (!cat)  { toast('Valitse kategoria'); return; }
   if (!name) { toast('Anna tuotteen nimi'); return; }
 
-  if (!library[cat]) library[cat] = [];
+  if (!LT().library[cat]) LT().library[cat] = [];
 
-  const dupe = library[cat].find(p => p.name.toLowerCase() === name.toLowerCase());
+  const dupe = LT().library[cat].find(p => p.name.toLowerCase() === name.toLowerCase());
   if (dupe) { toast('Tuote on jo kirjastossa: ' + dupe.name); return; }
 
-  library[cat].push({ id: Date.now(), name, unit: libUnit, price });
-  library[cat].sort((a, b) => a.name.localeCompare(b.name, 'fi'));
+  LT().library[cat].push({ id: Date.now(), name, unit: libUnit, price });
+  LT().library[cat].sort((a, b) => a.name.localeCompare(b.name, 'fi'));
 
   saveToStorage();
 
-  const formCat = document.getElementById('inp-cat').value;
-  if (formCat === cat || formCat === '__all__') renderProductSelect(formCat);
+  // Refresh form if lib tab matches active tab
+  if (libTab === activeTab) {
+    const formCat = document.getElementById('inp-cat').value;
+    if (formCat === cat || formCat === '__all__') renderProductSelect(formCat);
+  }
 
-  toast('✓ Tallennettu kirjastoon: ' + name);
+  toast('✓ Tallennettu: ' + name + ' → ' + LT().label);
   document.getElementById('popup-overlay').classList.remove('open');
 }
 
 /* ─── Library manager ───────────────────────────────────── */
 
 function openLibraryManager() {
+  lmTab = activeTab;
+  document.getElementById('lm-tab-ruoka').classList.toggle('active',   lmTab === 'ruoka');
+  document.getElementById('lm-tab-tavarat').classList.toggle('active', lmTab === 'tavarat');
   renderLibraryManager();
   document.getElementById('lib-manager-overlay').classList.add('open');
 }
@@ -382,8 +579,9 @@ function closeLibManager(e) {
 }
 
 function renderLibraryManager() {
-  const body     = document.getElementById('lib-manager-body');
-  const usedCats = cats.filter(c => library[c] && library[c].length > 0);
+  const body    = document.getElementById('lib-manager-body');
+  const t       = TABS[lmTab];
+  const usedCats = t.cats.filter(c => t.library[c] && t.library[c].length > 0);
 
   if (usedCats.length === 0) {
     body.innerHTML = '<div class="lib-empty">Kirjasto on tyhjä.<br>Lisää tuotteita + Uusi tuote -napista.</div>';
@@ -392,9 +590,9 @@ function renderLibraryManager() {
 
   body.innerHTML = '';
 
-  usedCats.forEach(cat => {
-    const products = library[cat] || [];
-    const color    = getCatColor(cat);
+  usedCats.slice().sort((a, b) => a.localeCompare(b, 'fi')).forEach(cat => {
+    const products = t.library[cat] || [];
+    const color    = getCatColor(cat, lmTab);
 
     const section = document.createElement('div');
     section.className = 'lib-cat-section';
@@ -416,23 +614,25 @@ function renderLibraryManager() {
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
         </button>`;
-      row.querySelector('.btn-lib-del').addEventListener('click', () => deleteFromLibrary(cat, p.id));
+      row.querySelector('.btn-lib-del').addEventListener('click', () => deleteFromLibrary(lmTab, cat, p.id));
       section.appendChild(row);
     });
-
     body.appendChild(section);
   });
 }
 
-function deleteFromLibrary(cat, id) {
-  if (!library[cat]) return;
-  const product = library[cat].find(p => p.id === id);
-  library[cat]  = library[cat].filter(p => p.id !== id);
-  if (library[cat].length === 0) delete library[cat];
+function deleteFromLibrary(tabKey, cat, id) {
+  const t = TABS[tabKey];
+  if (!t.library[cat]) return;
+  const product = t.library[cat].find(p => p.id === id);
+  t.library[cat] = t.library[cat].filter(p => p.id !== id);
+  if (t.library[cat].length === 0) delete t.library[cat];
   saveToStorage();
   renderLibraryManager();
-  const formCat = document.getElementById('inp-cat').value;
-  if (formCat === cat || formCat === '__all__') renderProductSelect(formCat);
+  if (tabKey === activeTab) {
+    const formCat = document.getElementById('inp-cat').value;
+    if (formCat === cat || formCat === '__all__') renderProductSelect(formCat);
+  }
   if (product) toast('Poistettu kirjastosta: ' + product.name);
 }
 
@@ -440,15 +640,23 @@ function deleteFromLibrary(cat, id) {
 
 function render() {
   updateSummary();
+  updateBadges();
   renderFilterBar();
   renderList();
   updateTotalBar();
 }
 
+function updateBadges() {
+  const rCount = TABS.ruoka.items.filter(i => !i.done).length;
+  const tCount = TABS.tavarat.items.filter(i => !i.done).length;
+  document.getElementById('badge-ruoka').textContent   = rCount   || '';
+  document.getElementById('badge-tavarat').textContent = tCount   || '';
+}
+
 function updateSummary() {
-  const done = items.filter(i => i.done).length;
-  document.getElementById('pill-count').textContent = items.length + ' tuotetta';
-  document.getElementById('pill-done').textContent  = done + ' / ' + items.length + ' ostettu';
+  const done = T().items.filter(i => i.done).length;
+  document.getElementById('pill-count').textContent = T().items.length + ' tuotetta';
+  document.getElementById('pill-done').textContent  = done + ' / ' + T().items.length + ' ostettu';
 }
 
 function updateTotalBar() {
@@ -456,46 +664,46 @@ function updateTotalBar() {
   const amount = document.getElementById('total-bar-amount');
   const sub    = document.getElementById('total-bar-sub');
 
-  if (items.length === 0) { bar.style.display = 'none'; return; }
+  if (T().items.length === 0) { bar.style.display = 'none'; return; }
   bar.style.display = '';
 
-  const total   = items.reduce((s, i) => s + i.qty * i.price, 0);
-  const done    = items.filter(i => i.done).length;
-  const doneAmt = items.filter(i => i.done).reduce((s, i) => s + i.qty * i.price, 0);
+  const total   = T().items.reduce((s, i) => s + i.qty * i.price, 0);
+  const done    = T().items.filter(i => i.done).length;
+  const doneAmt = T().items.filter(i => i.done).reduce((s, i) => s + i.qty * i.price, 0);
 
   amount.textContent = fmt(total);
   sub.textContent    = done > 0
     ? done + ' ostettu · ' + fmt(doneAmt) + ' käytetty'
-    : items.length + ' tuotetta ostamatta';
+    : T().items.length + ' tuotetta ostamatta';
 }
 
 function renderFilterBar() {
-  const usedCats = [...new Set(items.map(i => i.cat))]
-    .sort((a, b) => cats.indexOf(a) - cats.indexOf(b));
+  const usedCats = [...new Set(T().items.map(i => i.cat))]
+    .sort((a, b) => T().cats.indexOf(a) - T().cats.indexOf(b));
 
   const bar = document.getElementById('filter-bar');
   bar.innerHTML = '';
 
-  appendFilterBtn(bar, 'Kaikki', 'Kaikki (' + items.length + ')');
+  appendFilterBtn(bar, 'Kaikki', 'Kaikki (' + T().items.length + ')');
   usedCats.forEach(c => {
-    const count = items.filter(i => i.cat === c).length;
+    const count = T().items.filter(i => i.cat === c).length;
     appendFilterBtn(bar, c, c + ' (' + count + ')');
   });
 }
 
 function appendFilterBtn(container, value, label) {
   const btn = document.createElement('button');
-  btn.className = 'filter-btn' + (filterCat === value ? ' active' : '');
+  btn.className = 'filter-btn' + (T().filterCat === value ? ' active' : '');
   btn.textContent = label;
-  btn.addEventListener('click', () => { filterCat = value; render(); });
+  btn.addEventListener('click', () => { T().filterCat = value; render(); });
   container.appendChild(btn);
 }
 
 function renderList() {
   const container = document.getElementById('list-container');
-  const visible   = filterCat === 'Kaikki'
-    ? items
-    : items.filter(i => i.cat === filterCat);
+  const visible   = T().filterCat === 'Kaikki'
+    ? T().items
+    : T().items.filter(i => i.cat === T().filterCat);
 
   if (visible.length === 0) {
     container.innerHTML = `
@@ -506,14 +714,14 @@ function renderList() {
             <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
           </svg>
         </div>
-        <p>${items.length === 0 ? 'Lista on tyhjä' : 'Ei tuotteita tässä kategoriassa'}</p>
-        <span>${items.length === 0 ? 'Valitse kategoria ja tuote ylhäältä' : 'Valitse toinen kategoria'}</span>
+        <p>${T().items.length === 0 ? 'Lista on tyhjä' : 'Ei tuotteita tässä kategoriassa'}</p>
+        <span>${T().items.length === 0 ? 'Valitse kategoria ja tuote ylhäältä' : 'Valitse toinen kategoria'}</span>
       </div>`;
     return;
   }
 
   const groups = {};
-  cats.forEach(c => { groups[c] = []; });
+  T().cats.forEach(c => { groups[c] = []; });
   visible.forEach(i => {
     if (!groups[i.cat]) groups[i.cat] = [];
     groups[i.cat].push(i);
@@ -521,9 +729,7 @@ function renderList() {
 
   container.innerHTML = '';
 
-  // Render in category order, plus any unknown cats at end
-  const orderedCats = [...cats, ...Object.keys(groups).filter(c => !cats.includes(c))];
-
+  const orderedCats = [...T().cats, ...Object.keys(groups).filter(c => !T().cats.includes(c))];
   orderedCats.forEach(cat => {
     if (!groups[cat] || groups[cat].length === 0) return;
 
@@ -557,12 +763,9 @@ function buildItemRow(it) {
   row.dataset.id = it.id;
 
   const u      = it.unit || 'kpl';
-  const step   = u === 'kg' ? 0.1 : 1;
   const qtyStr = u === 'kg'
     ? it.qty.toFixed(it.qty % 1 === 0 ? 0 : 1) + ' kg'
     : (it.qty % 1 === 0 ? it.qty : it.qty.toFixed(1)) + ' kpl';
-
-  const priceStr = fmtPrice(it.price);
   const unitSuffix = u === 'kg' ? '<span class="per-unit">/kg</span>' : '';
 
   row.innerHTML = `
@@ -581,7 +784,7 @@ function buildItemRow(it) {
         <span class="qty-value">${qtyStr}</span>
         <button class="qty-btn btn-plus" title="Lisää">+</button>
       </div>
-      <div class="item-price">${priceStr}${unitSuffix}</div>
+      <div class="item-price">${fmtPrice(it.price)}${unitSuffix}</div>
       <div class="item-total">${fmt(it.qty * it.price)}</div>
     </div>`;
 
@@ -596,47 +799,56 @@ function buildItemRow(it) {
 
 function saveToStorage() {
   try {
-    localStorage.setItem('kauppalista_items_v4',   JSON.stringify(items));
-    localStorage.setItem('kauppalista_library_v4', JSON.stringify(library));
-    localStorage.setItem('kauppalista_cats_v4',    JSON.stringify(cats));
+    localStorage.setItem('kl_ruoka_items',   JSON.stringify(TABS.ruoka.items));
+    localStorage.setItem('kl_ruoka_lib',     JSON.stringify(TABS.ruoka.library));
+    localStorage.setItem('kl_ruoka_cats',    JSON.stringify(TABS.ruoka.cats));
+    localStorage.setItem('kl_tavarat_items', JSON.stringify(TABS.tavarat.items));
+    localStorage.setItem('kl_tavarat_lib',   JSON.stringify(TABS.tavarat.library));
+    localStorage.setItem('kl_tavarat_cats',  JSON.stringify(TABS.tavarat.cats));
   } catch(e) {}
 }
 
 function loadFromStorage() {
   try {
-    const rawItems = localStorage.getItem('kauppalista_items_v4');
-    const rawLib   = localStorage.getItem('kauppalista_library_v4');
-    const rawCats  = localStorage.getItem('kauppalista_cats_v4');
+    TABS.ruoka.items   = JSON.parse(localStorage.getItem('kl_ruoka_items')   || 'null') || [];
+    TABS.ruoka.library = JSON.parse(localStorage.getItem('kl_ruoka_lib')     || 'null') || {};
+    TABS.ruoka.cats    = JSON.parse(localStorage.getItem('kl_ruoka_cats')    || 'null') || DEFAULT_CATS_RUOKA.slice();
 
-    cats    = rawCats  ? JSON.parse(rawCats)  : DEFAULT_CATS.slice();
-    library = rawLib   ? JSON.parse(rawLib)   : {};
-    items   = rawItems ? JSON.parse(rawItems) : [];
+    TABS.tavarat.items   = JSON.parse(localStorage.getItem('kl_tavarat_items') || 'null') || [];
+    TABS.tavarat.library = JSON.parse(localStorage.getItem('kl_tavarat_lib')   || 'null') || {};
+    TABS.tavarat.cats    = JSON.parse(localStorage.getItem('kl_tavarat_cats')  || 'null') || DEFAULT_CATS_TAVARAT.slice();
 
-    // Migrate from v3
-    if (!rawItems) {
-      const v3Items = localStorage.getItem('kauppalista_items_v3');
-      const v3Lib   = localStorage.getItem('kauppalista_library_v3');
-      if (v3Items) items   = JSON.parse(v3Items);
-      if (v3Lib)   library = JSON.parse(v3Lib);
-      // Ensure all library cats exist in cats list
-      Object.keys(library).forEach(c => { if (!cats.includes(c)) cats.push(c); });
+    // Migrate from v4 (single list → ruoka tab)
+    const v4Items = localStorage.getItem('kauppalista_items_v4');
+    const v4Lib   = localStorage.getItem('kauppalista_library_v4');
+    const v4Cats  = localStorage.getItem('kauppalista_cats_v4');
+    if (v4Items && TABS.ruoka.items.length === 0) {
+      TABS.ruoka.items   = JSON.parse(v4Items) || [];
+      TABS.ruoka.library = JSON.parse(v4Lib)   || {};
+      TABS.ruoka.cats    = JSON.parse(v4Cats)  || DEFAULT_CATS_RUOKA.slice();
       saveToStorage();
     }
-  } catch(e) { cats = DEFAULT_CATS.slice(); library = {}; items = []; }
+  } catch(e) {
+    TABS.ruoka.cats    = DEFAULT_CATS_RUOKA.slice();
+    TABS.tavarat.cats  = DEFAULT_CATS_TAVARAT.slice();
+  }
 }
 
 /* ─── Export / Import ───────────────────────────────────── */
 
 function exportJSON() {
-  const data = { items, library, cats };
+  const data = {
+    tab: activeTab,
+    items: T().items, library: T().library, cats: T().cats
+  };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  triggerDownload(blob, 'kauppalista_' + dateStamp() + '.json');
-  toast('Viety JSON-tiedostona');
+  triggerDownload(blob, 'kauppalista_' + activeTab + '_' + dateStamp() + '.json');
+  toast('Viety JSON (' + T().label + ')');
 }
 
 function exportCSV() {
   const rows = [['Tuote','Kategoria','Yksikkö','Määrä','Hinta €','Yhteensä €','Ostettu']];
-  items.forEach(i => rows.push([
+  T().items.forEach(i => rows.push([
     i.name, i.cat, i.unit || 'kpl',
     (i.qty % 1 === 0 ? i.qty : i.qty.toFixed(1)),
     i.price.toFixed(2), (i.qty * i.price).toFixed(2),
@@ -644,8 +856,8 @@ function exportCSV() {
   ]));
   const csv  = rows.map(r => r.map(c => '"' + String(c).replace(/"/g,'""') + '"').join(',')).join('\r\n');
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
-  triggerDownload(blob, 'kauppalista_' + dateStamp() + '.csv');
-  toast('Viety CSV-tiedostona');
+  triggerDownload(blob, 'kauppalista_' + activeTab + '_' + dateStamp() + '.csv');
+  toast('Viety CSV (' + T().label + ')');
 }
 
 function importList(e) {
@@ -655,32 +867,29 @@ function importList(e) {
     try {
       if (file.name.endsWith('.json')) {
         const data = JSON.parse(ev.target.result);
-        if (data.items && data.library) {
-          items   = data.items;
-          library = data.library;
-          cats    = data.cats || DEFAULT_CATS.slice();
+        if (data.items !== undefined) {
+          T().items   = data.items   || [];
+          T().library = data.library || {};
+          T().cats    = data.cats    || DEFAULT_CATS_RUOKA.slice();
         } else if (Array.isArray(data)) {
-          items = data;
+          T().items = data;
         } else throw new Error();
-        saveToStorage();
-        populateCatSelect('inp-cat', true);
-        populateCatSelect('lib-cat', false);
-        render();
-        toast('Tuotu ' + items.length + ' tuotetta');
+        saveToStorage(); refreshFormSelects(); render();
+        toast('Tuotu ' + T().items.length + ' tuotetta');
       } else {
-        const lines    = ev.target.result.split(/\r?\n/).filter(Boolean);
+        const lines = ev.target.result.split(/\r?\n/).filter(Boolean);
         const imported = [];
         lines.slice(1).forEach(line => {
           const cols = parseCSVLine(line);
           if (cols[0]) imported.push({
             id: Date.now() + Math.random(),
-            name: cols[0], cat: cats.includes(cols[1]) ? cols[1] : cats[0],
+            name: cols[0], cat: T().cats.includes(cols[1]) ? cols[1] : T().cats[0],
             unit: cols[2] === 'kg' ? 'kg' : 'kpl',
             qty: parseFloat(cols[3]) || 1, price: parseFloat(cols[4]) || 0,
             done: cols[6] === 'Kyllä'
           });
         });
-        items = imported; saveToStorage(); render();
+        T().items = imported; saveToStorage(); render();
         toast('Tuotu ' + imported.length + ' tuotetta');
       }
     } catch(err) { toast('Virhe: tiedostoa ei voitu lukea'); }
